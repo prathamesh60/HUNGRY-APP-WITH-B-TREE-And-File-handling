@@ -49,7 +49,7 @@ typedef struct user_tag
   item_name *ordered_items;
   //struct user_tag *next;
 }user;
-int order_id_allocator=1000;
+int order_id_allocator=1002;
 typedef struct order_tag
 { char res_name[50];
   char res_address[50];
@@ -57,6 +57,7 @@ typedef struct order_tag
   int no_of_items;
   int item_index[100];
   int quantity_index[100];
+  int ord_time;
   agent *allocated_agent;
   user *username;
   float total_price;
@@ -458,7 +459,7 @@ void search_by_Cuisine_Util(loc_tree *root,int cuisine,int *x1)
 	  if(cuisine==root->all_eatspots[i].cuis_category)
 	  { if(*x1==0)
 	    printf("FOLLOWING ARE THE EATING SPOTS:\n");
-	 	printf("\n\n\nName:%s\nAddress:%s\n\n\n",root->all_eatspots[i].name,root->all_eatspots[i].address);
+	 	printf("Name:%s\nAddress:%s\n",root->all_eatspots[i].name,root->all_eatspots[i].address);
 	 	(*x1)++;
 	  }
 	 i++; 
@@ -991,46 +992,7 @@ void Write_data_into_file(loc_tree *root,FILE *fp)
 	Write_data_into_file(root->child[i],fp);	
 	
 }
-void load_database(loc_tree **root,agent_tree **agent_list)
-{
-	location value;
-	int x;
-	FILE *fp;
-	fp=fopen("restaurant.txt","r");
-	fscanf(fp,"%d\n",&x);
-	int i;
-	for(i=0;i<x;i++)
-	{
-		fscanf(fp,"%s\n%s\n%s\n%d\n",value.name,value.address,value.zone,&(value.no_of_seats));
-		menu *res_menu=(menu*)malloc(sizeof(menu));
-		fscanf(fp,"%d\n",&(res_menu->no_of_items));
-		int j;
-		for(j=0;j< (res_menu->no_of_items);j++)
-		{ 
-		  fscanf(fp,"%s\n%f\n",res_menu->item[j].itemname,&(res_menu->item[j].price));	
-		}
-		value.res_menu=res_menu;
-		fscanf(fp,"%d\n%d\n",&(value.category),&(value.cuis_category));
-		loc_tree* prev=NULL;
-		insert(&prev,root,value);
-	}
-	fclose(fp);
-    int max=113;
-    FILE *ap;
-    ap=fopen("agents.txt","r");
-    fscanf(ap,"%d\n",&x);\
-    agent valu;
-    for(i=0;i<x;i++)
-    {
-       fscanf(ap,"%d\n%s\n%s\n%s\n%f\n%d\n",&(valu.id),valu.name,valu.phone_no,valu.area,&(valu.curr_accu_commi),&(valu.is_available));
-	   if(valu.id>max)
-	   	max=valu.id;
-	   agent_tree *prev=NULL;
-	   insert_agent(&prev,agent_list,valu);
-	}
-	fclose(ap);
-    
-}
+
 void insert_new_agent(agent_tree **agent_list)
 { agent value;
   printf("Enter agents name: ");
@@ -1823,7 +1785,7 @@ void take_order(loc_tree *root,user_tree **users,order_tree **pending_orders,age
   int x;
   x1=&x;
   search_by_Cuisine(root,x1);
-  printf("%d\n",*x1);
+  //printf("%d\n",*x1);
   if(*x1!=0)
   { location *ans=NULL;
     printf("\nEnter name of the restaurant:");
@@ -1931,8 +1893,11 @@ void print_order(orders *nptr)
 			printf("User Address\t:%s\n",nptr->username->address);
 			printf("User Phone No.\t:%s\n",nptr->username->phone_no);
 			printf("Total price to be paid\t:%f\n",nptr->total_price);
+			if(nptr->allocated_agent!=NULL)
+			{
 			printf("Agent Name\t:%s\n",nptr->allocated_agent->name);
 			printf("Agent Phone No.\t:%s\n",nptr->allocated_agent->phone_no);
+		    }
 }
 void live_orders(order_tree *pending_orders)
 {   
@@ -2128,6 +2093,193 @@ void Write_user_into_file(user_tree *users,FILE *up)
    if(users->isLeaf==FALSE)
 	Write_user_into_file(users->child[i],up);	
 }
+
+int count_no_of_orders(order_tree *pending_orders)
+{
+    if(pending_orders==NULL)
+	return 0;
+    int i=0,x=pending_orders->count,count=0;
+    for(i=0;i<x;i++)
+    {   count++;
+    	if(pending_orders->isLeaf==FALSE)
+    	{
+    		count+=count_no_of_orders(pending_orders->child[i]);
+		}
+	}
+	if(pending_orders->isLeaf==FALSE)
+		{
+	      count+=count_no_of_orders(pending_orders->child[i]);
+		}
+  return count;
+	
+}
+void write_oinfo_file(orders nptr,FILE *op)
+{
+	fprintf(op,"%d\n%s\n%s\n%d\n",nptr.ord_id,nptr.res_name,nptr.res_address,nptr.no_of_items);
+	int i=0;
+	for(i=0;i< nptr.no_of_items;i++)
+	{
+		fprintf(op,"%d\n%d\n",nptr.item_index[i],nptr.quantity_index[i]);
+	}
+	fprintf(op,"%d\n",nptr.allocated_agent->id);
+	fprintf(op,"%s\n%f\n",nptr.username->phone_no,nptr.total_price);
+}
+void Write_order_into_file(order_tree *pending_orders,FILE *op)
+{
+  orders value;
+  int i,x=pending_orders->count;
+  for(i=0;i<x;i++)
+  {
+  	 if(pending_orders->isLeaf==FALSE)
+  	   Write_order_into_file(pending_orders->child[i],op);
+  	 write_oinfo_file(pending_orders->all_orders[i],op);
+  }
+  if(pending_orders->isLeaf==FALSE)
+  	Write_order_into_file(pending_orders->child[i],op);
+  
+	
+}
+
+agent *search_particular_agent(agent_tree* root,int id)
+{   if(root==NULL)
+     return  NULL;
+	agent *ans=NULL;
+	int x=root->count,i,temp=0;
+	while(i<x && temp==0)
+	{ //printf("Below are agents details:\n");
+	 //printf("Age name=%s\nname=%s\n",root->all_agents[i].name,root->all_agents[i].phone_no);
+	 //root->all_agents[i].phone_no;
+	  if(id > root->all_agents[i].id)
+	   	i++;
+	   else
+	    temp=1;
+	}
+   if(temp==1)
+   { if(id == root->all_agents[i].id )
+   	  ans=&(root->all_agents[i]);
+	 else if(root->isLeaf==FALSE)
+   	  ans=search_particular_agent(root->child[i],id);
+   	 
+   }
+  else
+   { if(root->isLeaf==FALSE)
+      ans=search_particular_agent(root->child[i],id); 
+   }
+   return ans;
+}
+void load_database(loc_tree **root,agent_tree **agent_list,user_tree **users,order_tree **pending_orders,order_tree **archived_orders)
+{
+	location value;
+	int x;
+	FILE *fp;
+	fp=fopen("restaurant.txt","r");
+	fscanf(fp,"%d\n",&x);
+	int i;
+	for(i=0;i<x;i++)
+	{
+		fscanf(fp,"%s\n%s\n%s\n%d\n",value.name,value.address,value.zone,&(value.no_of_seats));
+		menu *res_menu=(menu*)malloc(sizeof(menu));
+		fscanf(fp,"%d\n",&(res_menu->no_of_items));
+		int j;
+		for(j=0;j< (res_menu->no_of_items);j++)
+		{ 
+		  fscanf(fp,"%s\n%f\n",res_menu->item[j].itemname,&(res_menu->item[j].price));	
+		}
+		value.res_menu=res_menu;
+		fscanf(fp,"%d\n%d\n",&(value.category),&(value.cuis_category));
+		loc_tree* prev=NULL;
+		insert(&prev,root,value);
+	}
+	fclose(fp);
+    int max=113;
+    FILE *ap;
+    ap=fopen("agents.txt","r");
+    fscanf(ap,"%d\n",&x);
+    agent valu;
+    for(i=0;i<x;i++)
+    {
+       fscanf(ap,"%d\n%s\n%s\n%s\n%f\n%d\n",&(valu.id),valu.name,valu.phone_no,valu.area,&(valu.curr_accu_commi),&(valu.is_available));
+	   if(valu.id>max)
+	   	max=valu.id;
+	   agent_tree *prev=NULL;
+	   insert_agent(&prev,agent_list,valu);
+	}
+	fclose(ap);
+	agent_id_allocator=max+1;
+	FILE *up;
+	up=fopen("user.txt","r");
+	fscanf(up,"%d\n",&x);
+	user val;
+	for(i=0;i<x;i++)
+	{
+		 fscanf(up,"%s\n%s\n%s\n",val.phone_no,val.name,val.address);
+		 user_tree *uptr=NULL;
+		 insert_user(&uptr,users,val);
+		 //fprintf(up,"%s\n%s\n%s\n",value.phone_no,value.name,value.address);
+	}
+	fclose(up);
+	FILE *op;
+	op=fopen("pending_orders.txt","r");
+	fscanf(op,"%d\n",&x);
+	orders optr;
+	for(i=0;i<x;i++)
+	{ 
+	    fscanf(op,"%d\n%s\n%s\n%d\n",&(optr.ord_id),optr.res_name,optr.res_address,&(optr.no_of_items));
+	    int j;
+	    for(j=0;j< optr.no_of_items;j++)
+	    {
+	    	fscanf(op,"%d\n%d\n",&(optr.item_index[j]),&(optr.quantity_index[j]));
+		}
+	    location *lptr=search_particular_spot(*root,optr.res_name,optr.res_address);
+	    optr.ordered_restaurant=lptr;
+	    agent *aptr;
+	    char phone_no[11];
+	    fscanf(op,"%d\n",&j);
+	    //printf("agent=%s\n",phone_no);
+	    aptr=search_particular_agent(*agent_list,j);
+	    optr.allocated_agent=aptr;
+	    user *uiptr;
+	    fscanf(op,"%s\n",phone_no);
+	    //printf("user=%s\n",phone_no);
+	    uiptr=search_particular_user(*users,phone_no);
+	    optr.username=uiptr;
+	    fscanf(op,"%f\n",&(optr.total_price));
+	    order_tree *poptr=NULL;
+	    insert_order(&poptr,pending_orders,optr);
+	}
+    fclose(op);
+   FILE *alp;
+   alp=fopen("allocator.txt","w");
+   fscanf(alp,"%d\n",&order_id_allocator); 
+   fclose(alp);   
+   op=fopen("archived.txt","r");
+   fscanf(op,"%d\n",&x);
+   for(i=0;i<x;i++)
+	{ 
+	    fscanf(op,"%d\n%s\n%s\n%d\n",&(optr.ord_id),optr.res_name,optr.res_address,&(optr.no_of_items));
+	    int j;
+	    for(j=0;j< optr.no_of_items;j++)
+	    {
+	    	fscanf(op,"%d\n%d\n",&(optr.item_index[j]),&(optr.quantity_index[j]));
+		}
+	    location *lptr=search_particular_spot(*root,optr.res_name,optr.res_address);
+	    optr.ordered_restaurant=lptr;
+	    agent *aptr;
+	    char phone_no[11];
+	    fscanf(op,"%d\n",&j);
+	    //printf("agent=%s\n",phone_no);
+	    aptr=search_particular_agent(*agent_list,j);
+	    optr.allocated_agent=aptr;
+	    user *uiptr;
+	    fscanf(op,"%s\n",phone_no);
+	    //printf("user=%s\n",phone_no);
+	    uiptr=search_particular_user(*users,phone_no);
+	    optr.username=uiptr;
+	    fscanf(op,"%f\n",&(optr.total_price));
+	    order_tree *poptr=NULL;
+	    insert_order(&poptr,archived_orders,optr);
+	}
+}
 int main()
 {int i; 
  statuscode sc;
@@ -2140,7 +2292,7 @@ int main()
  agent_tree *agent_list=NULL,*agent_busy_list=NULL;
  user_tree *users=NULL;
  order_tree *pending_orders=NULL,*archived_orders=NULL;
- load_database(&root,&agent_list);
+ load_database(&root,&agent_list,&users,&pending_orders,&archived_orders);
   int x,query=-1;
 	printf("\t\t\t\t\t  *********************************************\n");
 	printf("\t\t\t\t\t* WELCOME TO OUR LIVE FOOD ORDER TRACKING SYSTEM *\n");
@@ -2220,6 +2372,27 @@ int main()
    	 Write_user_into_file(users,up);
    }
    fclose(up);
+   FILE *op;
+   op=fopen("pending_orders.txt","w");
+   x=count_no_of_orders(pending_orders);
+   fprintf(op,"%d\n",x);
+   if(pending_orders!=NULL)
+   {
+   	 Write_order_into_file(pending_orders,op);
+   }
+   fclose(op);
+   FILE *alp;
+   alp=fopen("allocator.txt","w");
+   fprintf(alp,"%d\n",order_id_allocator);
+   fclose(alp);
+   op=fopen("archived.txt","w");
+   x=count_no_of_orders(archived_orders);
+   fprintf(op,"%d\n",x);
+   if(archived_orders!=NULL)
+   {
+   	 Write_order_into_file(archived_orders,op);
+   }
+   fclose(op);
    return 0;
   
 }
